@@ -205,6 +205,16 @@ def get_f5p(landmarks):
     return f5p
 
 
+def get_useful_point(face_list, kp_num=6):
+    point_list = []
+    if kp_num == 6:
+        point_list = [face_list[8], face_list[30],
+                      face_list[36], face_list[45],
+                      face_list[48], face_list[54]]
+
+    return point_list
+
+
 if __name__ == '__main__':
 
     # img_path = '/home/wwgz-cbm/img/test'
@@ -217,41 +227,76 @@ if __name__ == '__main__':
     # 获取人脸关键点、对齐
     _, url_list, _ = get_key_point(img_path, train_data_list, face_list, kp_num=68)
 
+    # 先用六个点来做人脸姿态估计
+    new_point_list = np.array(get_useful_point(face_list[0], kp_num=6))
+
+    # 3D model points.
+    model_points = np.array([
+        (0.0, 0.0, 0.0),  # Nose tip
+        (0.0, -330.0, -65.0),  # Chin
+        (-225.0, 170.0, -135.0),  # Left eye left corner
+        (225.0, 170.0, -135.0),  # Right eye right corne
+        (-150.0, -150.0, -125.0),  # Left Mouth corner
+        (150.0, -150.0, -125.0)  # Right mouth corner
+    ])
+
+    # solvePnP函数解出旋转向量
+
+    focal_length = size[1]
+    center = (size[1] / 2, size[0] / 2)
+    camera_matrix = np.array(
+        [[focal_length, 0, center[0]],
+         [0, focal_length, center[1]],
+         [0, 0, 1]], dtype="double"
+    )
+
+    print("Camera Matrix :\n {0}".format(camera_matrix))
+
+    dist_coeffs = np.zeros((4, 1))  # Assuming no lens distortion
+    (success, rotation_vector, translation_vector) = cv2.solvePnP(model_points, new_point_list, camera_matrix,
+                                                                  dist_coeffs, flags=cv2.CV_ITERATIVE)
+
+    print("Rotation Vector:\n {0}".format(rotation_vector))
+    print("Translation Vector:\n {0}".format(translation_vector))
+
+
+
+
     # PCA降维，获取前95%特征
-    face_list, data_mean, V = do_pca(face_list, int(len(face_list[0])*0.95))
+    # face_list, data_mean, V = do_pca(face_list, int(len(face_list[0])*0.95))
 
     # 测试数据
-    test_list = []
-    _, test_url_list, _ = get_key_point(img_path, test_data_list, test_list, kp_num=68)
-
-    num_test = len(test_list)
-    temp_face = test_list - np.tile(data_mean, (num_test, 1))
-    data_test_new = temp_face * V
-    data_test_new = np.array(data_test_new)
-
-    result = []
-    for i in range(num_test):
-        plt.figure()
-
-        test_img = Image.open(test_url_list[i])
-        plt.subplot(1, 2, 1)
-        plt.title('test_img: ' + test_url_list[i][len(img_path):])
-        plt.imshow(test_img)
-        plt.axis('off')
-
-        test_face = data_test_new[i, :]
-        result.append(get_distance(test_face, face_list))  # 计算欧式距离
-
-        tran_img = Image.open(url_list[result[i].index(min(result[i]))])
-        plt.subplot(1, 2, 2)
-        plt.title('train_img: ' + url_list[result[i].index(min(result[i]))][len(img_path):])
-        plt.imshow(tran_img)
-        plt.axis('off')
-
-        if not os.path.exists('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/'):
-            os.makedirs('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/')
-        plt.savefig('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/' + str(i+1))
-        plt.show()
-
-        print('测试图片%s: 距离 %f' % (test_url_list[i], min(result[i])))
-        print('匹配结果: %s' % (url_list[result[i].index(min(result[i]))]))
+    # test_list = []
+    # _, test_url_list, _ = get_key_point(img_path, test_data_list, test_list, kp_num=68)
+    #
+    # num_test = len(test_list)
+    # temp_face = test_list - np.tile(data_mean, (num_test, 1))
+    # data_test_new = temp_face * V
+    # data_test_new = np.array(data_test_new)
+    #
+    # result = []
+    # for i in range(num_test):
+    #     plt.figure()
+    #
+    #     test_img = Image.open(test_url_list[i])
+    #     plt.subplot(1, 2, 1)
+    #     plt.title('test_img: ' + test_url_list[i][len(img_path):])
+    #     plt.imshow(test_img)
+    #     plt.axis('off')
+    #
+    #     test_face = data_test_new[i, :]
+    #     result.append(get_distance(test_face, face_list))  # 计算欧式距离
+    #
+    #     tran_img = Image.open(url_list[result[i].index(min(result[i]))])
+    #     plt.subplot(1, 2, 2)
+    #     plt.title('train_img: ' + url_list[result[i].index(min(result[i]))][len(img_path):])
+    #     plt.imshow(tran_img)
+    #     plt.axis('off')
+    #
+    #     if not os.path.exists('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/'):
+    #         os.makedirs('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/')
+    #     plt.savefig('/home/wwgz-cbm/Pictures/' + str(ratio) + 'ratio/' + str(i+1))
+    #     plt.show()
+    #
+    #     print('测试图片%s: 距离 %f' % (test_url_list[i], min(result[i])))
+    #     print('匹配结果: %s' % (url_list[result[i].index(min(result[i]))]))
